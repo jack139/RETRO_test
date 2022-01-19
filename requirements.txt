@@ -3,3 +3,6 @@ faiss-gpu
 numpy
 torch==1.8.1
 tqdm
+transformers
+sentence_transformers
+datasets

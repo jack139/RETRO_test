@@ -13,8 +13,8 @@
 
 
 ## TODO
-- [ ] 收集语料
-- [ ] 句子embedding的定义
+- [ ] 收集语料: CGLUE
+- [ ] 句子embedding的定义: Sentence Transformers?
 - [ ] 生成字典数据库
 - [ ] 字典数据库检索方法：faiss
 - [ ] 生成训练集
