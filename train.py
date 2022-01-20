@@ -9,6 +9,7 @@ encoder_tokenizer = AutoTokenizer.from_pretrained(encoder_name)
 decoder_tokenizer = AutoTokenizer.from_pretrained(decoder_name)
 decoder_tokenizer.pad_token = decoder_tokenizer.eos_token
 
+# 中文的句子embedding考虑 "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
 retro_ds = RetroDataset(
     "code_search_net",
     "flax-sentence-embeddings/st-codesearch-distilroberta-base",
