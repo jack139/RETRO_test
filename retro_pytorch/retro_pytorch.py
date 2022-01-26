@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn, einsum
 
+from retro_pytorch.retrieval import BERT_VOCAB_SIZE
 from einops import rearrange, repeat
 
 # constants
@@ -88,7 +89,8 @@ class Attention(nn.Module):
         dim_head = 64,
         heads = 8,
         causal = False,
-        dropout = 0.
+        dropout = 0.,
+        null_kv = False
     ):
         super().__init__()
         self.heads = heads
@@ -103,8 +105,12 @@ class Attention(nn.Module):
         self.to_kv = nn.Linear(dim, inner_dim * 2, bias = False)
         self.to_out = nn.Linear(inner_dim, dim)
 
+        # allowing for attending to nothing (null function)
+        # and to save attention from breaking if all retrieved chunks are padded out
+        self.null_kv = nn.Parameter(torch.randn(2, inner_dim)) if null_kv else None
+
     def forward(self, x, mask = None, context = None, pos_emb = None):
-        device, h, scale = x.device, self.heads, self.scale
+        b, device, h, scale = x.shape[0], x.device, self.heads, self.scale
 
         x = self.norm(x)
         kv_input = default(context, x)
@@ -128,6 +134,14 @@ class Attention(nn.Module):
             q = apply_rotary_pos_emb(q, q_pos_emb)
             k = apply_rotary_pos_emb(k, k_pos_emb)
 
+        # add null key / values
+
+        if exists(self.null_kv):
+            nk, nv = self.null_kv.unbind(dim = 0)
+            nk, nv = map(lambda t: repeat(t, '(h d) -> b h 1 d', b = b, h = h), (nk, nv))
+            k = torch.cat((nk, k), dim = -2)
+            v = torch.cat((nv, v), dim = -2)
+
         # derive query key similarities
 
         sim = einsum('b h i d, b h j d -> b h i j', q, k)
@@ -137,6 +151,9 @@ class Attention(nn.Module):
         mask_value = -torch.finfo(sim.dtype).max
 
         if exists(mask):
+            if exists(self.null_kv):
+                mask = F.pad(mask, (1, 0), value = True)
+
             mask = rearrange(mask, 'b j -> b 1 1 j')
             sim = sim.masked_fill(~mask, mask_value)
 
@@ -172,7 +189,7 @@ class ChunkedCrossAttention(nn.Module):
     ):
         super().__init__()
         self.chunk_size = chunk_size
-        self.cross_attn = Attention(**kwargs)
+        self.cross_attn = Attention(null_kv = True, **kwargs)
 
     def forward(self, x, *, context_mask = None, context, pos_emb = None):
         # derive variables
@@ -335,7 +352,7 @@ class RETRO(nn.Module):
     def __init__(
         self,
         *,
-        num_tokens,
+        num_tokens = BERT_VOCAB_SIZE,
         max_seq_len = 2048,
         enc_dim = 896,
         enc_depth = 2,
@@ -349,10 +366,13 @@ class RETRO(nn.Module):
         enc_ff_dropout = 0.,
         dec_attn_dropout = 0.,
         dec_ff_dropout = 0.,
-        chunk_size = 64
+        chunk_size = 64,
+        pad_id = 0
     ):
         super().__init__()
         assert dim_head >= MIN_DIM_HEAD, f'dimension per head must be greater than {MIN_DIM_HEAD}'
+        self.seq_len = max_seq_len
+        self.pad_id = pad_id
 
         self.token_emb = nn.Embedding(num_tokens, enc_dim)
         self.pos_emb = nn.Embedding(max_seq_len, enc_dim)
@@ -385,7 +405,6 @@ class RETRO(nn.Module):
         self,
         seq,
         retrieved,
-        mask = None,
         return_loss = False
     ):
         """
@@ -397,6 +416,10 @@ class RETRO(nn.Module):
         """
 
         assert not (return_loss and not self.training), 'must be training if returning loss'
+
+        # assume padding token id (usually 0.) is to be masked out
+
+        mask = retrieved == self.pad_id
 
         # handle some user inputs
 
@@ -410,7 +433,7 @@ class RETRO(nn.Module):
 
         # variables
 
-        n, num_chunks, num_neighbors, chunk_size, device = seq.shape[-1], *retrieved.shape[-3:], seq.device
+        n, num_chunks, num_neighbors, chunk_size, retrieved_shape, device = seq.shape[-1], *retrieved.shape[-3:], retrieved.shape, seq.device
 
         assert chunk_size >= self.chunk_size, 'chunk size of retrieval input must be greater or equal to the designated chunk_size on RETRO initialization'
         assert divisible_by(n, self.chunk_size), 'sequence length must be divisible by chunk size'
@@ -431,6 +454,7 @@ class RETRO(nn.Module):
         encoder_retrieved_mask = decoder_retrieved_mask = None
 
         if exists(mask):
+            assert mask.shape == retrieved_shape, 'retrieval mask must be of the same shape as the retrieval tokens'
             encoder_retrieved_mask = rearrange(mask, 'b k r n -> (b k r) n')
             decoder_retrieved_mask = mask
 
@@ -460,5 +484,5 @@ class RETRO(nn.Module):
 
         # cross entropy loss
 
-        loss = F.cross_entropy(rearrange(logits, 'b n c -> b c n'), labels)
+        loss = F.cross_entropy(rearrange(logits, 'b n c -> b c n'), labels, ignore_index = self.pad_id)
         return loss

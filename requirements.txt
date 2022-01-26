@@ -1,8 +1,7 @@
-einops==0.3.2
-faiss-gpu
-numpy
 torch==1.8.1
-tqdm
+einops==0.3.2
 transformers
-sentence_transformers
-datasets
+sentencepiece
+autofaiss
+numpy
+tqdm
