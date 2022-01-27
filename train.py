@@ -1,6 +1,7 @@
 import torch
 from torch.utils.data import DataLoader
 from retro_pytorch import RETRO, RETRODataset
+from retro_pytorch.optimizer import get_optimizer
 import numpy as np
 
 
@@ -26,6 +27,7 @@ train_ds = RETRODataset(
 )
 
 train_dl = iter(DataLoader(train_ds, batch_size = 2))
+optim = get_optimizer(lr = 3e-4, wd = 0.01)
 
 # one forwards and backwards
 
@@ -40,9 +42,9 @@ retro = RETRO(
     dim_head = 64,                           # dimension per head
     dec_attn_dropout = 0.25,                 # decoder attention dropout
     dec_ff_dropout = 0.25                    # decoder feedforward dropout
-)#.cuda()
+).cuda()
 
-'''
+
 seq, retrieved = map(lambda t: t.cuda(), next(train_dl))
 
 # seq       - (2, 2049)         - 1 extra token since split by seq[:, :-1], seq[:, 1:]
@@ -55,4 +57,5 @@ loss = retro(
 )
 
 loss.backward()
-'''
+optim.step()
+optim.zero_grad()
