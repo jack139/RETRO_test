@@ -130,4 +130,5 @@ dmypy.json
 
 ## test data
 test_data/
+output/
 .tmp/

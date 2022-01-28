@@ -2,6 +2,7 @@ from retro_pytorch.retrieval import text_folder_to_chunks_
 from retro_pytorch.retrieval import chunks_to_precalculated_knn_
 
 # mock data constants
+SEQ_LEN = 512
 CHUNK_SIZE = 64
 NUM_NEIGHBORS = 2
 
@@ -12,7 +13,7 @@ stats = text_folder_to_chunks_(
     seqs_memmap_path = './test_data/train.seq.dat',
     doc_ids_memmap_path = './test_data/train.doc_ids.dat',  # document ids are needed for filtering out neighbors belonging to same document appropriately during computation of nearest neighbors
     chunk_size = CHUNK_SIZE,
-    seq_len = 2048,
+    seq_len = SEQ_LEN,
     max_chunks = 1_000_000,
     max_seqs = 100_000
 )
