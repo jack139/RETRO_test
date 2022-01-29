@@ -2,6 +2,7 @@ import os
 import random
 import torch
 from torch.utils.data import DataLoader
+from torch.optim.lr_scheduler import StepLR
 from retro_pytorch import RETRO, RETRODataset
 from retro_pytorch.optimizer import get_optimizer
 import numpy as np
@@ -76,6 +77,8 @@ print('Trainable Parameters: %.3fM\n' % parameters)
 ## optimizer
 optimizer = get_optimizer(retro.parameters(), lr = lr, wd = 0.01)
 
+## lr stchedule
+lr_scheduler = StepLR(optimizer=optimizer, step_size=5, gamma=0.8)
 
 # 载入 checkpoint
 if os.path.exists(CHECKPOINT):
@@ -87,8 +90,12 @@ if os.path.exists(CHECKPOINT):
     print(f"Loaded {CHECKPOINT}: epochs= {total_epochs}, loss= {last_loss:.6f}")
 
 
+best_loss = 1e+4
+
 for epoch in range(epochs):
     epoch_loss = 0
+
+    print(f'Epoch: {epoch+1}, lr: {lr_scheduler.get_last_lr()[0]:.2e}')
 
     for seq, retrieved in tqdm(train_dl):
         seq, retrieved = seq.cuda(), retrieved.cuda()
@@ -105,17 +112,18 @@ for epoch in range(epochs):
 
         epoch_loss += loss / NUM_SEQS
 
-    print(
-        f"Epoch : {epoch+1} - loss : {epoch_loss:.4f}\n"
-    )
+    if epoch_loss <= best_loss:
+        best_loss = epoch_loss
+        # 保存
+        torch.save({
+                    'epoch'                : total_epochs+epoch+1,
+                    'model_state_dict'     : model.state_dict(),
+                    #'optimizer_state_dict' : optimizer.state_dict(),
+                    'loss'                 : epoch_loss,
+        }, f"./output/retro_s{SEQ_LEN}_b{batch_size}_e{total_epochs+epoch+1}_{epoch_loss:.6f}.pt.weights")
 
-# 保存
-torch.save({
-            'epoch'                : total_epochs+epochs,
-            'model_state_dict'     : model.state_dict(),
-            #'optimizer_state_dict' : optimizer.state_dict(),
-            'loss'                 : epoch_loss,
-            }, f"./output/retro_s{SEQ_LEN}_b{batch_size}_e{total_epochs+epochs}_{epoch_loss:.6f}.pt.weights")
+    print(f"loss : {epoch_loss:.6f} best_loss : {best_loss:.6f}\n")
+    lr_scheduler.step()
 
 '''
 # 清除训练时缓存， 用在notebook时
