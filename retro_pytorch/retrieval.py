@@ -180,16 +180,16 @@ def bert_embed(
     eps = 1e-8,
     pad_id = 0.
 ):
-    model = get_bert()
+    model = get_bert().cuda()
     mask = token_ids != pad_id
 
     outputs = model(
-        input_ids = token_ids,
-        attention_mask = mask,
+        input_ids = token_ids.cuda(),
+        attention_mask = mask.cuda(),
         output_hidden_states = True
     )
 
-    hidden_state = outputs.hidden_states[-1]
+    hidden_state = outputs.hidden_states[-1].cpu()
 
     if return_cls_repr:
         return hidden_state[:, 0]               # return [cls] as representation

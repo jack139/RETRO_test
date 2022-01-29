@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 
 # train parameters
-batch_size = 2
+batch_size = 8
 lr = 3e-4
 epochs = 2
 seed = 42
@@ -21,12 +21,12 @@ total_epochs = 0
 
 # mock data constants
 SEQ_LEN = 512
-NUM_CHUNKS = 66 # news1.txt NUM_CHUNKS = 66 NUM_DOCS = 1    NUM_SEQS = 3
-NUM_SEQS = 3
+NUM_CHUNKS = 53417 # wiki: NUM_CHUNKS = 53417    NUM_DOCS = 1    NUM_SEQS = 6678
+NUM_SEQS = 6678
 CHUNK_SIZE = 64
 NUM_NEIGHBORS = 2
 
-
+# random seed settings
 def seed_everything(seed):
     random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
@@ -78,7 +78,7 @@ print('Trainable Parameters: %.3fM\n' % parameters)
 optimizer = get_optimizer(retro.parameters(), lr = lr, wd = 0.01)
 
 ## lr stchedule
-lr_scheduler = StepLR(optimizer=optimizer, step_size=5, gamma=0.8)
+lr_scheduler = StepLR(optimizer=optimizer, step_size=3, gamma=0.8)
 
 # 载入 checkpoint
 if os.path.exists(CHECKPOINT):
