@@ -11,12 +11,12 @@ from tqdm import tqdm
 
 # train parameters
 batch_size = 12
-lr = 3e-4 * 0.8**2
+lr = 3e-4 * 0.8**(27//3)
 epochs = 20
 seed = 42
 
 # checkpoint
-CHECKPOINT = 'output/retro_s512_b12_e7_0.286835.pt.weights'
+CHECKPOINT = 'output/retro_s512_b12_e27_0.087456.pt.weights'
 total_epochs = 0
 
 # mock data constants
