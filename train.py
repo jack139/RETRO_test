@@ -10,9 +10,9 @@ from tqdm import tqdm
 
 
 # train parameters
-batch_size = 8
+batch_size = 12
 lr = 3e-4
-epochs = 2
+epochs = 20
 seed = 42
 
 # checkpoint
@@ -52,7 +52,7 @@ train_ds = RETRODataset(
     seq_memmap_path = './test_data/train.seq.dat'
 )
 
-train_dl = iter(DataLoader(train_ds, batch_size = batch_size))
+train_dl = DataLoader(train_ds, batch_size = batch_size)
 
 
 # one forwards and backwards
@@ -95,9 +95,10 @@ best_loss = 1e+4
 for epoch in range(epochs):
     epoch_loss = 0
 
-    print(f'Epoch: {epoch+1}, lr: {lr_scheduler.get_last_lr()[0]:.2e}')
+    print(f'Epoch: {epoch+1}/{epochs}, lr: {lr_scheduler.get_last_lr()[0]:.2e}')
 
-    for seq, retrieved in tqdm(train_dl):
+    pbar = tqdm(train_dl)
+    for seq, retrieved in pbar:
         seq, retrieved = seq.cuda(), retrieved.cuda()
 
         loss = retro(
@@ -112,12 +113,17 @@ for epoch in range(epochs):
 
         epoch_loss += loss / NUM_SEQS
 
+        pbar.update()
+        pbar.set_description(f'loss: {loss:.6f}')
+
+    pbar.close()
+
     if epoch_loss <= best_loss:
         best_loss = epoch_loss
         # 保存
         torch.save({
                     'epoch'                : total_epochs+epoch+1,
-                    'model_state_dict'     : model.state_dict(),
+                    'model_state_dict'     : retro.state_dict(),
                     #'optimizer_state_dict' : optimizer.state_dict(),
                     'loss'                 : epoch_loss,
         }, f"./output/retro_s{SEQ_LEN}_b{batch_size}_e{total_epochs+epoch+1}_{epoch_loss:.6f}.pt.weights")
@@ -128,7 +134,7 @@ for epoch in range(epochs):
 '''
 # 清除训练时缓存， 用在notebook时
 
-model = None
+retro = None
 torch.cuda.empty_cache()
 
 import gc
