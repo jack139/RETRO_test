@@ -11,12 +11,12 @@ from tqdm import tqdm
 
 # train parameters
 batch_size = 12
-lr = 3e-4
+lr = 3e-4 * 0.8**2
 epochs = 20
 seed = 42
 
 # checkpoint
-CHECKPOINT = 'output/retro_1_0.0.pt.weights'
+CHECKPOINT = 'output/retro_s512_b12_e7_0.286835.pt.weights'
 total_epochs = 0
 
 # mock data constants
@@ -83,11 +83,11 @@ lr_scheduler = StepLR(optimizer=optimizer, step_size=3, gamma=0.8)
 # 载入 checkpoint
 if os.path.exists(CHECKPOINT):
     checkpoint = torch.load(CHECKPOINT)
-    model.load_state_dict(checkpoint['model_state_dict'])
+    retro.load_state_dict(checkpoint['model_state_dict'])
     #optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     total_epochs = checkpoint['epoch']
     last_loss = checkpoint['loss']
-    print(f"Loaded {CHECKPOINT}: epochs= {total_epochs}, loss= {last_loss:.6f}")
+    print(f"Loaded {CHECKPOINT}: epochs= {total_epochs}, loss= {last_loss:.6f}\n")
 
 
 best_loss = 1e+4
@@ -113,8 +113,8 @@ for epoch in range(epochs):
 
         epoch_loss += loss / NUM_SEQS
 
-        pbar.update()
         pbar.set_description(f'loss: {loss:.6f}')
+        pbar.refresh()
 
     pbar.close()
 
