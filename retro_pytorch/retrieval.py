@@ -6,7 +6,6 @@ import torch.nn.functional as F
 import logging
 import numpy as np
 from einops import rearrange
-
 from transformers import AutoTokenizer, AutoModel
 
 import faiss
@@ -20,6 +19,7 @@ SOS_ID = 101
 EOS_ID = 102
 BERT_MODEL_DIM = 768
 BERT_VOCAB_SIZE = 30522
+#BERT_VOCAB_SIZE = 28996
 
 TMP_PATH = Path('./.tmp')
 EMBEDDING_TMP_SUBFOLDER = 'embeddings'
@@ -45,14 +45,14 @@ TOKENIZER = None
 def get_tokenizer():
     global TOKENIZER
     if not exists(TOKENIZER):
-        #TOKENIZER = torch.hub.load('huggingface/pytorch-transformers', 'tokenizer', 'bert-base-chinese')
+        #TOKENIZER = torch.hub.load('huggingface/pytorch-transformers', 'tokenizer', 'bert-base-cased')
         TOKENIZER = AutoTokenizer.from_pretrained("bert-base-chinese")
     return TOKENIZER
 
 def get_bert():
     global MODEL
     if not exists(MODEL):
-        #MODEL = torch.hub.load('huggingface/pytorch-transformers', 'model', 'bert-base-chinese')
+        #MODEL = torch.hub.load('huggingface/pytorch-transformers', 'model', 'bert-base-cased')
         MODEL = AutoModel.from_pretrained("bert-base-chinese")
     return MODEL
 
@@ -390,4 +390,4 @@ def chunks_to_precalculated_knn_(
             print(f'knns calculated for {dim_slice.stop} / {num_chunks}')
 
     print(f'knn saved to {knn_path}')
-    return knn_path
+    return knn_path, index
