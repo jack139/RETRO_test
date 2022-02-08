@@ -1,15 +1,18 @@
 import numpy as np
 from functools import partial
+import json
+from pathlib import Path
 
 import torch
 from torch import nn
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 from retro_pytorch import RETRO, RETRODataset
 from retro_pytorch.data import knn_to_retrieved_chunks
 from retro_pytorch.optimizer import get_optimizer
 from retro_pytorch.retrieval import text_folder_to_chunks_, chunks_to_precalculated_knn_, bert_embed, SOS_ID, EOS_ID
-from retro_pytorch.utils import memmap
+from retro_pytorch.utils import memmap, is_true_env_flag
 
 from einops import rearrange
 
@@ -128,27 +131,48 @@ class TrainingWrapper(nn.Module):
         doc_ids_memmap_path = './train.doc_ids.dat',
         max_chunks = 1_000_000,
         max_seqs = 100_000,
+        max_docs = 10_000,
         knn_extra_neighbors = 100,
+        processed_stats_json_path = './processed-stats.json',
+        faiss_index_filename = 'knn.index',
         **index_kwargs
     ):
         super().__init__()
         assert isinstance(retro, RETRO), 'retro must be instance of RETRO'
         self.retro = retro
 
-        self.stats = text_folder_to_chunks_(
-            folder = documents_path,
-            glob = glob,
-            chunks_memmap_path = chunks_memmap_path,
-            seqs_memmap_path = seqs_memmap_path,
-            doc_ids_memmap_path = doc_ids_memmap_path,
-            chunk_size = chunk_size,
-            seq_len = retro.seq_len,
-            max_chunks = max_chunks,
-            max_seqs = max_seqs
-        )
+        # store the processed training data statistics
+        # number of chunks, number of sequences
+
+        stats_path = Path(processed_stats_json_path)
+
+        # if the statistics file does not exist, process folders of text
+        # force reprocess by setting REPROCESS=1 when running training script
+
+        if not stats_path.exists() or is_true_env_flag('REPROCESS'):
+            self.stats = text_folder_to_chunks_(
+                folder = documents_path,
+                glob = glob,
+                chunks_memmap_path = chunks_memmap_path,
+                seqs_memmap_path = seqs_memmap_path,
+                doc_ids_memmap_path = doc_ids_memmap_path,
+                chunk_size = chunk_size,
+                seq_len = retro.seq_len,
+                max_chunks = max_chunks,
+                max_seqs = max_seqs,
+                max_docs = max_docs
+            )
+        else:
+            print(f'found to be previously processed at {str(stats_path)}')
+            self.stats = json.loads(stats_path.read_text())
+
+        # get number of chunks and number of sequences
 
         num_chunks = self.stats['chunks']
         num_seqs = self.stats['seqs']
+
+        # calculate knn memmap path and get the faiss index
+        # todo - make sure if faiss_index_filename is found, do not reprocess unless flag is given
 
         knn_memmap_path, faiss_index = chunks_to_precalculated_knn_(
             num_chunks = num_chunks,
@@ -157,8 +181,11 @@ class TrainingWrapper(nn.Module):
             doc_ids_memmap_path = doc_ids_memmap_path,
             num_nearest_neighbors = knn,
             num_extra_neighbors = knn_extra_neighbors,
+            index_file = faiss_index_filename,
             **index_kwargs
         )
+
+        # retro dataset
 
         self.ds = RETRODataset(
             num_sequences = num_seqs,
@@ -190,6 +217,7 @@ class TrainingWrapper(nn.Module):
     def generate(
         self,
         start = None,
+        retrieved = None,
         filter_fn = top_k,
         filter_thres = 0.9,
         temperature = 1.0,
