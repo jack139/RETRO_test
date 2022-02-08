@@ -15,8 +15,7 @@ stats = text_folder_to_chunks_(
     chunk_size = CHUNK_SIZE,
     seq_len = SEQ_LEN,
     max_chunks = 1_000_000,
-    max_seqs = 100_000,
-    max_docs = 100_000
+    max_seqs = 100_000
 )
 
 NUM_CHUNKS, NUM_DOCS, NUM_SEQS = stats['chunks'], stats['docs'], stats['seqs']

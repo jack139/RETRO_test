@@ -161,8 +161,7 @@ class TrainingWrapper(nn.Module):
                 chunk_size = chunk_size,
                 seq_len = retro.seq_len,
                 max_chunks = max_chunks,
-                max_seqs = max_seqs,
-                max_docs = max_docs
+                max_seqs = max_seqs
             )
         else:
             print(f'found to be previously processed at {str(stats_path)}')
