@@ -1,15 +1,10 @@
-import os
-import random
 import torch
 import torch.nn.functional as F
 from functools import partial
 from retro_pytorch import RETRO
-from retro_pytorch.training import top_k, top_p, exists, SOS_ID, EOS_ID, \
-        gumbel_sample, safe_cat, knn_chunks_from_seq_chunks
-from retro_pytorch.retrieval import faiss_read_index, tokenize, get_tokenizer
+from retro_pytorch.training import top_k, top_p, exists, gumbel_sample, safe_cat, knn_chunks_from_seq_chunks
+from retro_pytorch.retrieval import SOS_ID, EOS_ID, faiss_read_index, tokenize, get_tokenizer
 from einops import rearrange
-import numpy as np
-from tqdm import tqdm
 
 
 # checkpoint
