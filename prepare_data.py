@@ -7,8 +7,8 @@ CHUNK_SIZE = 64
 NUM_NEIGHBORS = 2
 
 stats = text_folder_to_chunks_(
-    folder = './test_data',
-    glob = '**/*.txt',
+    folder = './test_data/text',
+    glob = '**/zz*.txt',
     chunks_memmap_path = './test_data/train.chunks.dat',
     seqs_memmap_path = './test_data/train.seq.dat',
     doc_ids_memmap_path = './test_data/train.doc_ids.dat',  # document ids are needed for filtering out neighbors belonging to same document appropriately during computation of nearest neighbors

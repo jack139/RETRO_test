@@ -8,13 +8,13 @@ from einops import rearrange
 
 
 # checkpoint
-CHECKPOINT = 'output/retro_s512_b12_e27_0.087456.pt.weights'
+CHECKPOINT = 'output/retro_s512_b12_e9_2.937676.pt.weights'
 total_epochs = 0
 
 # mock data constants
 SEQ_LEN = 512
-NUM_CHUNKS = 53417 # wiki: NUM_CHUNKS = 53417    NUM_DOCS = 1    NUM_SEQS = 6678
-NUM_SEQS = 6678
+NUM_CHUNKS = 48764
+NUM_SEQS = 6096
 CHUNK_SIZE = 64
 NUM_NEIGHBORS = 2
 
@@ -131,7 +131,7 @@ def generate(start = None, retrieved = None, filter_fn = top_k, filter_thres = 0
 
 if __name__ == '__main__':
 
-    prompt_text = '这是测试'
+    prompt_text = '始皇东游'
 
     # 生成 prompt token
     prompt = tokenize(prompt_text, add_special_tokens=False)

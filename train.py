@@ -11,18 +11,19 @@ from tqdm import tqdm
 
 # train parameters
 batch_size = 12
-lr = 3e-4 * 0.8**(27//3)
+lr = 3e-4
 epochs = 20
 seed = 42
 
 # checkpoint
-CHECKPOINT = 'output/retro_s512_b12_e27_0.087456.pt.weights'
+CHECKPOINT = 'output/retro_s512_b12_e9_2.937676.pt.weights'
 total_epochs = 0
 
 # mock data constants
 SEQ_LEN = 512
-NUM_CHUNKS = 53417 # wiki: NUM_CHUNKS = 53417    NUM_DOCS = 1    NUM_SEQS = 6678
-NUM_SEQS = 6678
+NUM_CHUNKS = 48764 # wiki: NUM_CHUNKS = 53417    NUM_DOCS = 1    NUM_SEQS = 6678
+                   # zztj: NUM_CHUNKS = 48764    NUM_DOCS = 1    NUM_SEQS = 6096
+NUM_SEQS = 6096
 CHUNK_SIZE = 64
 NUM_NEIGHBORS = 2
 
@@ -74,20 +75,22 @@ parameters = filter(lambda p: p.requires_grad, retro.parameters())
 parameters = sum([np.prod(p.size()) for p in parameters]) / 1_000_000
 print('Trainable Parameters: %.3fM\n' % parameters)
 
+# 载入 checkpoint
+if os.path.exists(CHECKPOINT):
+    checkpoint = torch.load(CHECKPOINT)
+    retro.load_state_dict(checkpoint['model_state_dict'])
+    total_epochs = checkpoint['epoch']
+    last_loss = checkpoint['loss']
+    print(f"Loaded {CHECKPOINT}: epochs= {total_epochs}, loss= {last_loss:.6f}\n")
+    # 调整起始lr
+    lr = lr * 0.8**(total_epochs//3)
+
+
 ## optimizer
 optimizer = get_optimizer(retro.parameters(), lr = lr, wd = 0.01)
 
 ## lr stchedule
 lr_scheduler = StepLR(optimizer=optimizer, step_size=3, gamma=0.8)
-
-# 载入 checkpoint
-if os.path.exists(CHECKPOINT):
-    checkpoint = torch.load(CHECKPOINT)
-    retro.load_state_dict(checkpoint['model_state_dict'])
-    #optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-    total_epochs = checkpoint['epoch']
-    last_loss = checkpoint['loss']
-    print(f"Loaded {CHECKPOINT}: epochs= {total_epochs}, loss= {last_loss:.6f}\n")
 
 
 best_loss = 1e+4
@@ -111,7 +114,7 @@ for epoch in range(epochs):
         optimizer.step()
         optimizer.zero_grad()
 
-        epoch_loss += loss / NUM_SEQS
+        epoch_loss += loss / len(train_dl)
 
         pbar.set_description(f'loss: {loss:.6f}')
         pbar.refresh()
