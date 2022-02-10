@@ -1,19 +1,16 @@
 import os
 import random
 import torch
+import torch.nn.functional as F
+from functools import partial
 from retro_pytorch import RETRO
-from retro_pytorch.training import top_k, top_p, knn_chunks_from_seq_chunks
-from retro_pytorch.retrieval import faiss_read_index
+from retro_pytorch.training import top_k, top_p, exists, SOS_ID, EOS_ID, \
+        gumbel_sample, safe_cat, knn_chunks_from_seq_chunks
+from retro_pytorch.retrieval import faiss_read_index, tokenize, get_tokenizer
 from einops import rearrange
 import numpy as np
 from tqdm import tqdm
 
-
-# train parameters
-batch_size = 12
-lr = 3e-4 * 0.8**(27//3)
-epochs = 20
-seed = 42
 
 # checkpoint
 CHECKPOINT = 'output/retro_s512_b12_e27_0.087456.pt.weights'
@@ -138,5 +135,17 @@ def generate(start = None, retrieved = None, filter_fn = top_k, filter_thres = 0
     return out
 
 if __name__ == '__main__':
-    out = generate()
-    print(out)
+
+    prompt_text = '这是测试'
+
+    # 生成 prompt token
+    prompt = tokenize(prompt_text, add_special_tokens=False)
+    print(prompt)
+
+    # 生成文本
+    out = generate(prompt)
+
+    # token转为为文字
+    tokenizer = get_tokenizer()
+    txt=tokenizer.batch_decode(out, skip_special_tokens=True, clean_up_tokenization_spaces=True) 
+    print(txt[0])
