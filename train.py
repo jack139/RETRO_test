@@ -16,7 +16,7 @@ epochs = 20
 seed = 42
 
 # checkpoint
-CHECKPOINT = 'output/retro_s512_b12_e9_2.937676.pt.weights'
+CHECKPOINT = 'output/retro_s512_b12_e18_1.419856.pt.weights'
 total_epochs = 0
 
 # mock data constants
