@@ -142,5 +142,5 @@ if __name__ == '__main__':
 
     # token转为为文字
     tokenizer = get_tokenizer()
-    txt=tokenizer.batch_decode(out, skip_special_tokens=True, clean_up_tokenization_spaces=True) 
-    print(txt[0])
+    txt=tokenizer.batch_decode(out, skip_special_tokens=True, clean_up_tokenization_spaces=True)
+    print(txt[0].replace(' ',''))
