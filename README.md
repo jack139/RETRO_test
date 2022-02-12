@@ -23,4 +23,5 @@ python3 train.py
 
 ## 参考
 [https://arxiv.org/abs/2112.04426](https://arxiv.org/abs/2112.04426)
+
 [https://github.com/lucidrains/RETRO-pytorch](https://github.com/lucidrains/RETRO-pytorch)
