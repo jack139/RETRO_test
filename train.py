@@ -13,10 +13,12 @@ from tqdm import tqdm
 batch_size = 12
 lr = 3e-4
 epochs = 20
+step_size = 5
+gamma = 0.8
 seed = 42
 
 # checkpoint
-CHECKPOINT = 'output/retro_s512_b12_e18_1.419856.pt.weights'
+CHECKPOINT = 'output/retro_s512_b12_e31_0.494477.pt.weights'
 total_epochs = 0
 
 # mock data constants
@@ -83,14 +85,14 @@ if os.path.exists(CHECKPOINT):
     last_loss = checkpoint['loss']
     print(f"Loaded {CHECKPOINT}: epochs= {total_epochs}, loss= {last_loss:.6f}\n")
     # 调整起始lr
-    lr = lr * 0.8**(total_epochs//3)
+    lr = lr * gamma**(total_epochs//step_size)
 
 
 ## optimizer
 optimizer = get_optimizer(retro.parameters(), lr = lr, wd = 0.01)
 
 ## lr stchedule
-lr_scheduler = StepLR(optimizer=optimizer, step_size=3, gamma=0.8)
+lr_scheduler = StepLR(optimizer=optimizer, step_size=step_size, gamma=gamma)
 
 
 best_loss = 1e+4

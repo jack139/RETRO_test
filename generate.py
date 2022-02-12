@@ -8,7 +8,7 @@ from einops import rearrange
 
 
 # checkpoint
-CHECKPOINT = 'output/retro_s512_b12_e18_1.419856.pt.weights'
+CHECKPOINT = 'output/retro_s512_b12_e31_0.494477.pt.weights'
 total_epochs = 0
 
 # mock data constants
