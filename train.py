@@ -13,7 +13,7 @@ from tqdm import tqdm
 batch_size = 12
 lr = 3e-4
 epochs = 20
-step_size = 5
+step_size = 3
 gamma = 0.8
 seed = 42
 
@@ -123,7 +123,7 @@ for epoch in range(epochs):
 
     pbar.close()
 
-    if epoch_loss <= best_loss:
+    if epoch>0 and epoch_loss <= best_loss: # 第1轮作为warmup
         best_loss = epoch_loss
         # 保存
         torch.save({
