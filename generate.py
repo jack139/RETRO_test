@@ -5,18 +5,11 @@ from retro_pytorch import RETRO
 from retro_pytorch.training import top_k, top_p, exists, gumbel_sample, safe_cat, knn_chunks_from_seq_chunks
 from retro_pytorch.retrieval import SOS_ID, EOS_ID, faiss_read_index, tokenize, get_tokenizer
 from einops import rearrange
-
+from configs import *
 
 # checkpoint
-CHECKPOINT = 'output/retro_s512_b12_e32_0.175466.pt.weights'
+CHECKPOINT = 'output/retro_s512_b12_e34_0.400526.pt.weights'
 total_epochs = 0
-
-# mock data constants
-SEQ_LEN = 512
-NUM_CHUNKS = 48764
-NUM_SEQS = 6096
-CHUNK_SIZE = 64
-NUM_NEIGHBORS = 2
 
 
 # one forwards and backwards
@@ -46,14 +39,14 @@ print(f"Loaded {CHECKPOINT}: epochs= {total_epochs}, loss= {last_loss:.6f}\n")
 def generate(start = None, retrieved = None, filter_fn = top_k, filter_thres = 0.9, temperature = 1.0):
     assert filter_fn in {top_k, top_p}, 'filter function must be either top-k or nucleus'
 
-    faiss_index = faiss_read_index('./.tmp/.index/knn.index')
+    faiss_index = faiss_read_index(f'{TRAIN_DATA_PATH}/tmp/.index/knn.index')
 
     fetch_knn_chunks_fn = partial(
         knn_chunks_from_seq_chunks,
         knn = 2,
         chunk_size = CHUNK_SIZE,
         num_chunks = NUM_CHUNKS,
-        chunks_memmap_path = './test_data/train.chunks.dat',
+        chunks_memmap_path = f'{TRAIN_DATA_PATH}/train.chunks.dat',
         faiss_index = faiss_index
     )
 

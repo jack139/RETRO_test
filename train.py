@@ -7,10 +7,10 @@ from retro_pytorch import RETRO, RETRODataset
 from retro_pytorch.optimizer import get_optimizer
 import numpy as np
 from tqdm import tqdm
-
+from configs import *
 
 # train parameters
-batch_size = 16
+batch_size = 12
 lr = 3e-4
 epochs = 20
 step_size = 5
@@ -18,16 +18,10 @@ gamma = 0.8
 seed = 42
 
 # checkpoint
-CHECKPOINT = 'output/retro_s512_b12_e31_0.494477.pt.weights'
+CHECKPOINT = ''
+#CHECKPOINT = 'output/retro_s512_b12_e31_0.494477.pt.weights'
 total_epochs = 0
 
-# mock data constants
-SEQ_LEN = 512
-NUM_CHUNKS = 48764 # wiki: NUM_CHUNKS = 53417    NUM_DOCS = 1    NUM_SEQS = 6678
-                   # zztj: NUM_CHUNKS = 48764    NUM_DOCS = 1    NUM_SEQS = 6096
-NUM_SEQS = 6096
-CHUNK_SIZE = 64
-NUM_NEIGHBORS = 2
 
 # random seed settings
 def seed_everything(seed):
@@ -50,9 +44,9 @@ train_ds = RETRODataset(
     num_neighbors = NUM_NEIGHBORS,
     chunk_size = CHUNK_SIZE,
     seq_len = SEQ_LEN,
-    chunk_memmap_path = './test_data/train.chunks.dat',
-    chunk_nn_memmap_path = './test_data/train.chunks.knn.dat',
-    seq_memmap_path = './test_data/train.seq.dat'
+    chunk_memmap_path = f'{TRAIN_DATA_PATH}/train.chunks.dat',
+    chunk_nn_memmap_path = f'{TRAIN_DATA_PATH}/train.chunks.knn.dat',
+    seq_memmap_path = f'{TRAIN_DATA_PATH}/train.seq.dat'
 )
 
 train_dl = DataLoader(train_ds, batch_size = batch_size)

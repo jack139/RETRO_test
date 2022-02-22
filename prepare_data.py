@@ -1,17 +1,16 @@
-from retro_pytorch.retrieval import text_folder_to_chunks_
-from retro_pytorch.retrieval import chunks_to_precalculated_knn_
+from configs import TRAIN_DATA_PATH, SEQ_LEN, CHUNK_SIZE, NUM_NEIGHBORS
+from retro_pytorch import retrieval
 
-# mock data constants
-SEQ_LEN = 512
-CHUNK_SIZE = 64
-NUM_NEIGHBORS = 2
+retrieval.TMP_PATH = retrieval.Path(f'{TRAIN_DATA_PATH}/tmp')
+retrieval.INDEX_FOLDER_PATH = retrieval.TMP_PATH / '.index'
 
-stats = text_folder_to_chunks_(
+
+stats = retrieval.text_folder_to_chunks_(
     folder = './test_data/text',
-    glob = '**/zz*.txt',
-    chunks_memmap_path = './test_data/train.chunks.dat',
-    seqs_memmap_path = './test_data/train.seq.dat',
-    doc_ids_memmap_path = './test_data/train.doc_ids.dat',  # document ids are needed for filtering out neighbors belonging to same document appropriately during computation of nearest neighbors
+    glob = '**/wiki*.txt',
+    chunks_memmap_path = f'{TRAIN_DATA_PATH}/train.chunks.dat',
+    seqs_memmap_path = f'{TRAIN_DATA_PATH}/train.seq.dat',
+    doc_ids_memmap_path = f'{TRAIN_DATA_PATH}/train.doc_ids.dat',  # document ids are needed for filtering out neighbors belonging to same document appropriately during computation of nearest neighbors
     chunk_size = CHUNK_SIZE,
     seq_len = SEQ_LEN,
     max_chunks = 1_000_000,
@@ -22,11 +21,12 @@ NUM_CHUNKS, NUM_DOCS, NUM_SEQS = stats['chunks'], stats['docs'], stats['seqs']
 
 print('NUM_CHUNKS = %d\tNUM_DOCS = %d\tNUM_SEQS = %d'%(NUM_CHUNKS, NUM_DOCS, NUM_SEQS))
 
-chunks_to_precalculated_knn_(
+
+retrieval.chunks_to_precalculated_knn_(
     num_chunks = NUM_CHUNKS,
     chunk_size = CHUNK_SIZE,
-    chunk_memmap_path = './test_data/train.chunks.dat',    # path to main chunks dataset
-    doc_ids_memmap_path = './test_data/train.doc_ids.dat', # path to document ids created by text_folder_to_chunks_, used for filtering out neighbors that belong to the same document
+    chunk_memmap_path = f'{TRAIN_DATA_PATH}/train.chunks.dat',    # path to main chunks dataset
+    doc_ids_memmap_path = f'{TRAIN_DATA_PATH}/train.doc_ids.dat', # path to document ids created by text_folder_to_chunks_, used for filtering out neighbors that belong to the same document
     num_nearest_neighbors = NUM_NEIGHBORS,                   # number of nearest neighbors you'd like to use
     num_extra_neighbors = 10                     # fetch 10 extra neighbors, in the case that fetched neighbors are frequently from same document (filtered out)
 )
