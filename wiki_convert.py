@@ -7,7 +7,7 @@ glob = '**/wiki*'
 paths = sorted([*Path(folder).glob(glob)])
 
 with open('./test_data/wiki_zh_2019.txt', 'w') as output_data:
-    for path in tqdm(paths):
+    for path in tqdm(paths[:100]):
         with open(path, encoding='utf-8') as f:
             for l in f:
                 l = json.loads(l)

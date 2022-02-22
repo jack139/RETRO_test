@@ -10,10 +10,10 @@ from tqdm import tqdm
 
 
 # train parameters
-batch_size = 12
+batch_size = 16
 lr = 3e-4
 epochs = 20
-step_size = 3
+step_size = 5
 gamma = 0.8
 seed = 42
 
