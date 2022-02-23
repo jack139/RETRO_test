@@ -16,10 +16,11 @@ epochs = 20
 step_size = 5
 gamma = 0.8
 seed = 42
+warmup = 200
 
 # checkpoint
-CHECKPOINT = ''
-#CHECKPOINT = 'output/retro_s512_b12_e31_0.494477.pt.weights'
+#CHECKPOINT = ''
+CHECKPOINT = 'output/retro_s512_b12_e2_3.584857.pt.weights'
 total_epochs = 0
 
 
@@ -93,11 +94,16 @@ best_loss = 1e+4
 
 for epoch in range(epochs):
     epoch_loss = 0
+    epoch_n = 0
 
     print(f'Epoch: {epoch+1}/{epochs}, lr: {lr_scheduler.get_last_lr()[0]:.2e}')
 
     pbar = tqdm(train_dl)
     for seq, retrieved in pbar:
+
+        if epoch==0 and epoch_n>warmup: # 第1轮是warmup
+            continue
+
         seq, retrieved = seq.cuda(), retrieved.cuda()
 
         loss = retro(
@@ -114,6 +120,8 @@ for epoch in range(epochs):
 
         pbar.set_description(f'loss: {loss:.6f}')
         pbar.refresh()
+
+        epoch_n += 1
 
     pbar.close()
 

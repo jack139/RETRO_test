@@ -8,7 +8,7 @@ from einops import rearrange
 from configs import *
 
 # checkpoint
-CHECKPOINT = 'output/retro_s512_b12_e34_0.400526.pt.weights'
+CHECKPOINT = 'output/retro_s512_b12_e2_3.584857.pt.weights'
 total_epochs = 0
 
 
@@ -124,7 +124,8 @@ def generate(start = None, retrieved = None, filter_fn = top_k, filter_thres = 0
 
 if __name__ == '__main__':
 
-    prompt_text = '始皇东游'
+    #prompt_text = '始皇东游'
+    prompt_text = '数学是利用符号语言研究数量、结构、变化以及空间等概念的'
 
     # 生成 prompt token
     prompt = tokenize(prompt_text, add_special_tokens=False)
