@@ -20,7 +20,7 @@ warmup = 200
 
 # checkpoint
 #CHECKPOINT = ''
-CHECKPOINT = 'output/retro_s512_b12_e2_3.584857.pt.weights'
+CHECKPOINT = 'output/retro_s512_b12_e3_3.316920.pt.weights'
 total_epochs = 0
 
 
