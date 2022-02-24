@@ -2,7 +2,7 @@ import os
 import random
 import torch
 from torch.utils.data import DataLoader
-from torch.optim.lr_scheduler import StepLR
+from torch.optim.lr_scheduler import StepLR, LambdaLR
 from retro_pytorch import RETRO, RETRODataset
 from retro_pytorch.optimizer import get_optimizer
 import numpy as np
@@ -89,21 +89,20 @@ optimizer = get_optimizer(retro.parameters(), lr = lr, wd = 0.01)
 ## lr stchedule
 lr_scheduler = StepLR(optimizer=optimizer, step_size=step_size, gamma=gamma)
 
+# warm_up_with_step_lr
+#warm_up_epochs = 1
+#warm_up_with_multistep_lr = lambda epoch: 1e-3 if epoch < warm_up_epochs else gamma**(epoch//step_size)
+#lr_scheduler = LambdaLR(optimizer, lr_lambda=warm_up_with_multistep_lr)
 
 best_loss = 1e+4
 
 for epoch in range(epochs):
     epoch_loss = 0
-    epoch_n = 0
 
     print(f'Epoch: {epoch+1}/{epochs}, lr: {lr_scheduler.get_last_lr()[0]:.2e}')
 
     pbar = tqdm(train_dl)
     for seq, retrieved in pbar:
-
-        if epoch==0 and epoch_n>warmup: # 第1轮是warmup
-            continue
-
         seq, retrieved = seq.cuda(), retrieved.cuda()
 
         loss = retro(
@@ -121,11 +120,9 @@ for epoch in range(epochs):
         pbar.set_description(f'loss: {loss:.6f}')
         pbar.refresh()
 
-        epoch_n += 1
-
     pbar.close()
 
-    if epoch>0 and epoch_loss <= best_loss: # 第1轮作为warmup
+    if epoch_loss <= best_loss:
         best_loss = epoch_loss
         # 保存
         torch.save({
