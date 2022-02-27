@@ -8,7 +8,7 @@ from einops import rearrange
 from configs import *
 
 # checkpoint
-CHECKPOINT = 'output/retro_s512_b12_e3_3.316920.pt.weights'
+CHECKPOINT = 'output/retro_s512_b12_e7_2.943321.pt.weights'
 total_epochs = 0
 
 
