@@ -1,3 +1,5 @@
+from functools import partial
+
 import torch
 import torch.nn.functional as F
 from torch import nn, einsum
@@ -23,6 +25,20 @@ def divisible_by(val, divisor):
 def cast_tuple(val, num = 1):
     return val if isinstance(val, tuple) else ((val,) * num)
 
+# deepnet init
+
+def deepnorm_init(transformer, beta, module_name_match_list = ['.ff.', '.to_v', '.to_out']):
+    for name, module in transformer.named_modules():
+        if type(module) != nn.Linear:
+            continue
+
+        needs_beta_gain = any(map(lambda substr: substr in name, module_name_match_list))
+        gain = beta if needs_beta_gain else 1
+        nn.init.xavier_normal_(module.weight.data, gain = gain)
+
+        if exists(module.bias):
+            nn.init.constant_(module.bias.data, 0)
+
 # normalization
 
 class RMSNorm(nn.Module):
@@ -40,6 +56,29 @@ class RMSNorm(nn.Module):
     def forward(self, x):
         norm = x.norm(keepdim = True, dim = -1) * self.scale
         return (x / norm.clamp(min = self.eps)) * self.gamma
+
+# pre and post norm residual wrapper modules
+
+class PreNorm(nn.Module):
+    def __init__(self, dim, fn, norm_klass = RMSNorm):
+        super().__init__()
+        self.fn = fn
+        self.norm = norm_klass(dim)
+
+    def forward(self, x, *args, **kwargs):
+        return self.fn(self.norm(x), *args, **kwargs) + x
+
+class PostNorm(nn.Module):
+    def __init__(self, dim, fn, scale_residual = 1, norm_klass = RMSNorm):
+        super().__init__()
+        self.fn = fn
+        self.scale_residual = scale_residual
+        self.norm = norm_klass(dim)
+
+    def forward(self, x, *args, **kwargs):
+        residual = x * self.scale_residual
+        out = self.fn(x, *args, **kwargs) + residual
+        return self.norm(out)
 
 # positional embedding
 
@@ -68,16 +107,20 @@ def apply_rotary_pos_emb(t, freqs):
 
 # feedforward
 
-def FeedForward(dim, mult = 4, dropout = 0.):
-    inner_dim = int(mult * dim)
+class FeedForward(nn.Module):
+    def __init__(self, dim, mult = 4, dropout = 0.):
+        super().__init__()
+        inner_dim = int(mult * dim)
 
-    return nn.Sequential(
-        RMSNorm(dim),
-        nn.Linear(dim, inner_dim),
-        nn.GELU(),
-        nn.Dropout(dropout),
-        nn.Linear(inner_dim, dim)
-    )
+        self.ff = nn.Sequential(
+            nn.Linear(dim, inner_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(inner_dim, dim)
+        )
+
+    def forward(self, x):
+        return self.ff(x)
 
 # attention
 
@@ -98,25 +141,24 @@ class Attention(nn.Module):
         self.causal = causal
         inner_dim = dim_head * heads
 
-        self.norm = RMSNorm(dim)
         self.dropout = nn.Dropout(dropout)
 
         self.to_q = nn.Linear(dim, inner_dim, bias = False)
-        self.to_kv = nn.Linear(dim, inner_dim * 2, bias = False)
+        self.to_k = nn.Linear(dim, inner_dim, bias = False)
+        self.to_v = nn.Linear(dim, inner_dim, bias = False)
         self.to_out = nn.Linear(inner_dim, dim)
 
         # allowing for attending to nothing (null function)
         # and to save attention from breaking if all retrieved chunks are padded out
-        self.null_kv = nn.Parameter(torch.randn(2, inner_dim)) if null_kv else None
+        self.null_k = nn.Parameter(torch.randn(inner_dim)) if null_kv else None
+        self.null_v = nn.Parameter(torch.randn(inner_dim)) if null_kv else None
 
     def forward(self, x, mask = None, context = None, pos_emb = None):
         b, device, h, scale = x.shape[0], x.device, self.heads, self.scale
 
-        x = self.norm(x)
         kv_input = default(context, x)
 
-        q = self.to_q(x)
-        k, v = self.to_kv(kv_input).chunk(2, dim = -1)
+        q, k, v = self.to_q(x), self.to_k(kv_input), self.to_v(kv_input)
 
         # split heads
 
@@ -136,8 +178,8 @@ class Attention(nn.Module):
 
         # add null key / values
 
-        if exists(self.null_kv):
-            nk, nv = self.null_kv.unbind(dim = 0)
+        if exists(self.null_k):
+            nk, nv = self.null_k, self.null_v
             nk, nv = map(lambda t: repeat(t, '(h d) -> b h 1 d', b = b, h = h), (nk, nv))
             k = torch.cat((nk, k), dim = -2)
             v = torch.cat((nv, v), dim = -2)
@@ -151,7 +193,7 @@ class Attention(nn.Module):
         mask_value = -torch.finfo(sim.dtype).max
 
         if exists(mask):
-            if exists(self.null_kv):
+            if exists(self.null_k):
                 mask = F.pad(mask, (1, 0), value = True)
 
             mask = rearrange(mask, 'b j -> b 1 1 j')
@@ -260,7 +302,10 @@ class Encoder(nn.Module):
         ff_mult = 4,
         ff_dropout = 0.,
         final_norm = True,
-        cross_attn_layers = None
+        cross_attn_layers = None,
+        post_norm = False,
+        norm_klass = RMSNorm,
+        scale_residual = 1.
     ):
         super().__init__()
         self.layers = nn.ModuleList([])
@@ -268,16 +313,18 @@ class Encoder(nn.Module):
         rotary_emb_dim = max(dim_head // 2, MIN_DIM_HEAD)
         self.rotary_pos_emb = RotaryEmbedding(rotary_emb_dim)
 
+        wrapper = partial(PreNorm, dim, norm_klass = norm_klass) if not post_norm else partial(PostNorm, dim, scale_residual = scale_residual, norm_klass = norm_klass)
+
         for layer_num in range(1, depth + 1):
             has_cross_attn = not exists(cross_attn_layers) or layer_num in cross_attn_layers
 
             self.layers.append(nn.ModuleList([
-                Attention(dim = dim, dim_head = dim_head, heads = heads, dropout = attn_dropout, causal = causal),
-                Attention(dim = dim, dim_head = dim_head, heads = heads, dropout = attn_dropout) if has_cross_attn else None,
-                FeedForward(dim = dim, mult = ff_mult, dropout = ff_dropout),
+                wrapper(Attention(dim = dim, dim_head = dim_head, heads = heads, dropout = attn_dropout, causal = causal)),
+                wrapper(Attention(dim = dim, dim_head = dim_head, heads = heads, dropout = attn_dropout)) if has_cross_attn else None,
+                wrapper(FeedForward(dim = dim, mult = ff_mult, dropout = ff_dropout)),
             ]))
 
-        self.norm_out = RMSNorm(dim) if final_norm else nn.Identity()
+        self.norm_out = norm_klass(dim) if final_norm and not post_norm else nn.Identity()
 
     def forward(self, x, *, mask = None, chunked_seq):
         device, chunk_size, seq_len = x.device, x.shape[-2], chunked_seq.shape[-2]
@@ -286,12 +333,12 @@ class Encoder(nn.Module):
         k_pos_emb = self.rotary_pos_emb(seq_len, device = device)
 
         for attn, cross_attn, ff in self.layers:
-            x = attn(x, mask = mask, pos_emb = q_pos_emb) + x
+            x = attn(x, mask = mask, pos_emb = q_pos_emb)
 
             if exists(cross_attn):
-                x = cross_attn(x, context = chunked_seq, pos_emb = (q_pos_emb, k_pos_emb)) + x
+                x = cross_attn(x, context = chunked_seq, pos_emb = (q_pos_emb, k_pos_emb))
 
-            x = ff(x) + x
+            x = ff(x)
 
         return self.norm_out(x)
 
@@ -308,25 +355,31 @@ class Decoder(nn.Module):
         ff_dropout = 0.,
         final_norm = True,
         cross_attn_layers = None,
-        chunk_size = 64
+        chunk_size = 64,
+        post_norm = False,
+        norm_klass = RMSNorm,
+        scale_residual = 1.
     ):
         super().__init__()
         self.layers = nn.ModuleList([])
 
         rotary_emb_dim = max(dim_head // 2, MIN_DIM_HEAD)
         self.rotary_pos_emb = RotaryEmbedding(rotary_emb_dim)
+
+        wrapper = partial(PreNorm, dim, norm_klass = norm_klass) if not post_norm else partial(PostNorm, dim, scale_residual = scale_residual, norm_klass = norm_klass)
+
         self.chunk_size = chunk_size
 
         for layer_num in range(1, depth + 1):
             has_cross_attn = not exists(cross_attn_layers) or layer_num in cross_attn_layers
 
             self.layers.append(nn.ModuleList([
-                Attention(dim = dim, dim_head = dim_head, heads = heads, dropout = attn_dropout, causal = True),
-                ChunkedCrossAttention(chunk_size = chunk_size, dim = dim, dim_head = dim_head, heads = heads, dropout = attn_dropout) if has_cross_attn else None,
-                FeedForward(dim = dim, mult = ff_mult, dropout = ff_dropout),
+                wrapper(Attention(dim = dim, dim_head = dim_head, heads = heads, dropout = attn_dropout, causal = True)),
+                wrapper(ChunkedCrossAttention(chunk_size = chunk_size, dim = dim, dim_head = dim_head, heads = heads, dropout = attn_dropout)) if has_cross_attn else None,
+                wrapper(FeedForward(dim = dim, mult = ff_mult, dropout = ff_dropout)),
             ]))
 
-        self.norm_out = RMSNorm(dim) if final_norm else nn.Identity()
+        self.norm_out = RMSNorm(dim) if final_norm and not post_norm else nn.Identity()
 
     def forward(self, x, *, context_mask = None, retrieved = None):
         device, seq_len = x.device, x.shape[-2]
@@ -341,7 +394,7 @@ class Decoder(nn.Module):
             cross_attn_pos_emb = (cross_attn_q_pos_emb, cross_attn_k_pos_emb)
 
         for attn, cross_attn, ff in self.layers:
-            x = attn(x, pos_emb = self_attn_pos_emb) + x
+            x = attn(x, pos_emb = self_attn_pos_emb)
 
             if exists(cross_attn) and exists(retrieved):
                 x = cross_attn(
@@ -349,9 +402,9 @@ class Decoder(nn.Module):
                     context = retrieved,
                     context_mask = context_mask,
                     pos_emb = cross_attn_pos_emb
-                ) + x
+                )
 
-            x = ff(x) + x
+            x = ff(x)
 
         return self.norm_out(x)
 
@@ -376,7 +429,11 @@ class RETRO(nn.Module):
         dec_attn_dropout = 0.,
         dec_ff_dropout = 0.,
         chunk_size = 64,
-        pad_id = 0
+        pad_id = 0,
+        enc_scale_residual = None,
+        dec_scale_residual = None,
+        norm_klass = None,
+        use_deepnet = False
     ):
         super().__init__()
         assert dim_head >= MIN_DIM_HEAD, f'dimension per head must be greater than {MIN_DIM_HEAD}'
@@ -391,12 +448,25 @@ class RETRO(nn.Module):
         self.to_decoder_model_dim = nn.Linear(enc_dim, dec_dim) if enc_dim != dec_dim else nn.Identity()
         self.encoder_output_to_decoder_dim = nn.Linear(enc_dim, dec_dim) if enc_dim != dec_dim else nn.Identity()
 
+        # for deepnet, residual scales
+        # follow equation in Figure 2. in https://arxiv.org/abs/2203.00555
+
+        if use_deepnet:
+            enc_scale_residual = default(enc_scale_residual, 0.81 * ((enc_depth ** 4) * dec_depth) ** .0625)
+            dec_scale_residual = default(dec_scale_residual, (3 * dec_depth) ** 0.25)
+            norm_klass = nn.LayerNorm
+
+        # define encoder and decoders
+
         self.encoder = Encoder(
             dim = enc_dim,
             depth = enc_depth,
             attn_dropout = enc_attn_dropout,
             ff_dropout = enc_ff_dropout,
-            cross_attn_layers = enc_cross_attn_layers
+            cross_attn_layers = enc_cross_attn_layers,
+            post_norm = use_deepnet,
+            norm_klass = norm_klass,
+            scale_residual = enc_scale_residual
         )
 
         self.decoder = Decoder(
@@ -405,10 +475,19 @@ class RETRO(nn.Module):
             attn_dropout = dec_attn_dropout,
             ff_dropout = dec_ff_dropout,
             cross_attn_layers = dec_cross_attn_layers,
-            chunk_size = chunk_size
+            chunk_size = chunk_size,
+            post_norm = use_deepnet,
+            norm_klass = norm_klass,
+            scale_residual = dec_scale_residual
         )
 
         self.to_logits = nn.Linear(dec_dim, num_tokens)
+
+        # deepnet has special init of weight matrices
+
+        if use_deepnet:
+            deepnorm_init(self.encoder, 0.87 * ((enc_depth ** 4) * dec_depth) ** -0.0625)
+            deepnorm_init(self.decoder, (12 * dec_depth) ** -0.25)
 
     def forward_without_retrieval(
         self,
@@ -453,7 +532,7 @@ class RETRO(nn.Module):
 
         # assume padding token id (usually 0.) is to be masked out
 
-        mask = retrieved == self.pad_id
+        mask = retrieved != self.pad_id
 
         # handle some user inputs
 

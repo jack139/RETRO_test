@@ -60,6 +60,8 @@ def get_bert():
     if not exists(MODEL):
         #MODEL = torch.hub.load('huggingface/pytorch-transformers', 'model', 'bert-base-cased')
         MODEL = AutoModel.from_pretrained("bert-base-chinese")
+        if torch.cuda.is_available():
+            MODEL = MODEL.cuda()
     return MODEL
 
 # tokenize
@@ -185,16 +187,19 @@ def bert_embed(
     eps = 1e-8,
     pad_id = 0.
 ):
-    model = get_bert().cuda()
+    model = get_bert()
     mask = token_ids != pad_id
 
+    if torch.cuda.is_available():
+        token_ids = token_ids.cuda()
+
     outputs = model(
-        input_ids = token_ids.cuda(),
-        attention_mask = mask.cuda(),
+        input_ids = token_ids,
+        attention_mask = mask,
         output_hidden_states = True
     )
 
-    hidden_state = outputs.hidden_states[-1].cpu()
+    hidden_state = outputs.hidden_states[-1]
 
     if return_cls_repr:
         return hidden_state[:, 0]               # return [cls] as representation
@@ -288,7 +293,8 @@ def index_embeddings(
         index_infos_path = str(INDEX_FOLDER_PATH / index_infos_file),
         max_index_memory_usage = max_index_memory_usage,
         current_memory_available = current_memory_available,
-        should_be_memory_mappable = True
+        should_be_memory_mappable = True,
+        use_gpu = torch.cuda.is_available(),
     )
 
     index = faiss_read_index(index_path)
